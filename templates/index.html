@@ -1,0 +1,68 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Universal PDF Link Uploader</title><link rel="stylesheet" href="/static/style.css"></head><body><main><h1>Universal PDF Link Uploader</h1><p class="muted">Configure a site's upload page and selectors, queue PDFs, and capture matching public links.</p>
+<form action="/queue/" method="post" enctype="multipart/form-data">{% csrf_token %}
+<label>Website upload page URL<input name="site_url" type="url" placeholder="https://example.com/upload" required value="https://www.trsil.org/careers/3281/apply"></label>
+<div class="grid"><label>File input CSS selector <small>(optional; blank = first input[type=file])</small><input name="file_selector" placeholder='input[type="file"]'></label><label>Uploaded link CSS selector <small>(optional; blank = scan links)</small><input name="link_selector" placeholder='a[href*="/files/"]'></label></div>
+<label>Upload/continue button CSS selector <small>(optional; leave blank if selection auto-uploads)</small><input name="upload_trigger" placeholder='button[type="submit"]'></label>
+<label>Wait for matching link (seconds)<input name="wait_seconds" type="number" min="10" max="600" value="120"></label>
+<label>Select PDF files<input type="file" name="pdfs" accept=".pdf,application/pdf" multiple required></label>
+<button type="submit">Queue PDFs</button></form>
+<div class="actions"><button id="start">Start background run</button><button class="light" id="stop">Stop</button><a href="/export/">Export CSV</a><button class="light" id="copy">Copy captured links</button></div>
+<div id="message">Ready</div><table><thead><tr><th>#</th><th>Filename</th><th>Status</th><th>URL</th><th>Note</th></tr></thead><tbody id="rows"></tbody></table>
+<div class="warning"><b>Important limitations:</b> There is no truly universal upload selector or workflow. Sites differ in login, form steps, AJAX behavior, CAPTCHA, upload buttons, and URL generation. Configure selectors per site when needed. This tool does not bypass CAPTCHA/authentication or submit final applications. Test one file and verify that its URL remains live before a large batch.</div></main>
+<script>
+let rows=[];
+function getCsrf(){
+  const el=document.querySelector('[name=csrfmiddlewaretoken]');
+  return el ? el.value : '';
+}
+async function post(u){
+  try {
+    const csrf=getCsrf();
+    const r=await fetch(u,{method:'POST',headers:{'X-CSRFToken':csrf}});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok)alert(d.error||'Request failed');
+    refresh();
+  } catch(e) {
+    console.error('Error:', e);
+    alert('Error: '+e.message);
+  }
+}
+document.getElementById('start').onclick=()=>post('/start/');
+document.getElementById('stop').onclick=()=>post('/stop/');
+document.getElementById('copy').onclick=()=>navigator.clipboard.writeText(rows.filter(x=>x.url).map(x=>x.url).join('\n'));
+async function refresh(){
+  try{
+    const d=await(await fetch('/status/')).json();
+    rows=d.items;
+    document.getElementById('message').textContent=d.message+(d.running?' • running':'');
+    const b=document.getElementById('rows');
+    b.replaceChildren();
+    rows.forEach((x,i)=>{
+      const tr=document.createElement('tr');
+      [i+1,x.filename,x.status].forEach(v=>{
+        const td=document.createElement('td');
+        td.textContent=v;
+        tr.appendChild(td)
+      });
+      const td=document.createElement('td');
+      if(x.url){
+        const a=document.createElement('a');
+        a.href=x.url;
+        a.target='_blank';
+        a.rel='noopener';
+        a.textContent=x.url;
+        td.appendChild(a)
+      }
+      tr.appendChild(td);
+      const note=document.createElement('td');
+      note.textContent=x.note||'';
+      tr.appendChild(note);
+      b.appendChild(tr)
+    })
+  }catch(e){
+    console.error('Refresh error:', e);
+  }
+}
+refresh();
+setInterval(refresh,1500);
+</script></body></html>
