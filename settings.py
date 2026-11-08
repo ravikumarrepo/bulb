@@ -1,4 +1,5 @@
 from pathlib import Path
+WSGI_APPLICATION = 'bulb.wsgi.application'
 BASE_DIR=Path(__file__).resolve().parent
 SECRET_KEY="local-development-only"
 DEBUG=True
